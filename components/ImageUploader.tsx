@@ -4,7 +4,7 @@
 */
 
 import React, { useCallback, useRef, useState, useImperativeHandle, forwardRef, useEffect } from 'react';
-import { isolateProductImage } from '../services/geminiService';
+import { isolateProductImage } from '../services/falService';
 
 interface ImageUploaderProps {
   id: string;
@@ -157,12 +157,7 @@ const ImageUploader = forwardRef<HTMLImageElement, ImageUploaderProps>(({ id, la
         onFileSelect(newFile);
     } catch (err: any) {
         console.error("Background removal failed:", err);
-        // If it's a permission error, pass it up to trigger auth flow
-        if (err.message && (err.message.includes("Permission Denied") || err.message.includes("403"))) {
-            if (onError) onError(err);
-        } else {
-            setFileTypeError("Failed to remove background. Please try again.");
-        }
+        setFileTypeError("Failed to remove background. Please try again.");
     } finally {
         setIsProcessingBg(false);
     }

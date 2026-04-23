@@ -5,7 +5,7 @@
 */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { generateCompositeImage, isolateProductImage, editScene } from './services/geminiService';
+import { generateCompositeImage, isolateProductImage, editScene } from './services/falService';
 import { Product, DepthLayer } from './types';
 import Header from './components/Header';
 import ImageUploader from './components/ImageUploader';
@@ -78,7 +78,6 @@ const loadingMessages = [
 
 
 const App: React.FC = () => {
-  const [hasApiKey, setHasApiKey] = useState(false);
   const [currentView, setCurrentView] = useState<'studio' | 'dashboard'>('studio');
   const [inventory, setInventory] = useState<Product[]>(initialInventory);
 
@@ -111,43 +110,9 @@ const App: React.FC = () => {
   const sceneImageUrl = sceneImage ? URL.createObjectURL(sceneImage) : null;
   const productImageUrl = selectedProduct ? selectedProduct.imageUrl : null;
 
-  useEffect(() => {
-    const checkKey = async () => {
-        try {
-            if (window.aistudio && await window.aistudio.hasSelectedApiKey()) {
-                setHasApiKey(true);
-            }
-        } catch (e) {
-            console.error("Error checking API key", e);
-        }
-    }
-    checkKey();
-  }, []);
-
-  const handleApiKeySelect = async () => {
-      if (window.aistudio) {
-          await window.aistudio.openSelectKey();
-          setHasApiKey(true);
-      }
-  };
-
   const handleError = useCallback((err: any) => {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-      
-      // Detection of auth or permission errors specifically for Pro models
-      const isAuthOrPermissionError = 
-          errorMessage.includes("Requested entity was not found") || 
-          errorMessage.includes("permission") || 
-          errorMessage.includes("403") ||
-          errorMessage.includes("PERMISSION_DENIED") ||
-          errorMessage.includes("API key");
-
-      if (isAuthOrPermissionError) {
-          setHasApiKey(false);
-          setError("Access Denied: Use an API key from a project with billing enabled for Gemini 3 Pro.");
-      } else {
-          setError(`Action failed: ${errorMessage}`);
-      }
+      setError(`Action failed: ${errorMessage}`);
       console.error(err);
   }, []);
 
@@ -165,9 +130,6 @@ const App: React.FC = () => {
           finalFile = dataURLtoFile(isolatedDataUrl, file.name);
           finalImageUrl = isolatedDataUrl; 
         } catch (isolationError: any) {
-          if (isolationError.message && (isolationError.message.includes("Permission Denied") || isolationError.message.includes("403"))) {
-              throw isolationError;
-          }
           console.warn("Product isolation failed, falling back to original image.", isolationError);
           finalImageUrl = URL.createObjectURL(file);
         }
@@ -416,44 +378,6 @@ const App: React.FC = () => {
     const fileInput = document.getElementById('scene-uploader') as HTMLInputElement;
     if (fileInput) fileInput.click();
   };
-
-  if (!hasApiKey) {
-      return (
-          <div className="h-screen w-full flex flex-col items-center justify-center bg-zinc-50 p-8 text-center animate-fade-in font-sans">
-              <h1 className="font-serif text-5xl italic text-zinc-900 mb-6">Velvet Willow</h1>
-              <div className="max-w-md bg-white p-8 rounded-2xl shadow-xl border border-zinc-100">
-                  <h2 className="text-xl font-bold mb-4 text-zinc-800">Professional Access Required</h2>
-                  <p className="text-zinc-600 mb-8 leading-relaxed">
-                      To access the professional design tools powered by Nano Banana Pro (Gemini 3 Pro), you must connect an API key from a project with billing enabled.
-                  </p>
-                  {error && (
-                      <div className="mb-4 p-3 bg-red-50 text-red-600 text-xs rounded border border-red-100">
-                          {error}
-                      </div>
-                  )}
-                  <button 
-                      onClick={handleApiKeySelect}
-                      className="w-full bg-zinc-900 text-white px-8 py-4 rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-black hover:scale-[1.02] transition-all shadow-lg flex items-center justify-center gap-2"
-                  >
-                      <span>Connect API Key</span>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                      </svg>
-                  </button>
-                  <div className="mt-6 pt-6 border-t border-zinc-100">
-                    <a 
-                        href="https://ai.google.dev/gemini-api/docs/billing" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-xs text-zinc-400 hover:text-zinc-800 underline transition-colors"
-                    >
-                        View Billing Documentation
-                    </a>
-                  </div>
-              </div>
-          </div>
-      );
-  }
 
   return (
     <div className="h-screen bg-white text-zinc-800 flex flex-col font-sans overflow-hidden">

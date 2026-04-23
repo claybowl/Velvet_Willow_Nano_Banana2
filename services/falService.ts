@@ -5,8 +5,10 @@
 */
 
 
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { DepthLayer } from '../types';
+
+const FAL_API_KEY = process.env.FAL_API_KEY || '';
+const FAL_BASE_URL = 'https://fal.run/fal-ai/nano-banana-2';
 
 // Helper for retrying API calls with exponential backoff
 const retryWithBackoff = async <T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> => {
@@ -16,22 +18,22 @@ const retryWithBackoff = async <T>(fn: () => Promise<T>, retries = 3, delay = 20
         const isQuotaError = 
             error.status === 429 || 
             error.code === 429 || 
-            (error.message && /quota|429|resource_exhausted/i.test(error.message));
+            (error.message && /quota|429|rate.limit|too.many.requests/i.test(error.message));
         
         if (isQuotaError && retries > 0) {
-            console.warn(`Quota exceeded/Rate limit hit. Retrying in ${delay}ms... (${retries} retries left)`);
+            console.warn(`Rate limit hit. Retrying in ${delay}ms... (${retries} retries left)`);
             await new Promise(resolve => setTimeout(resolve, delay));
             return retryWithBackoff(fn, retries - 1, delay * 2);
         }
         
-        // Handle Permission Denied (403) or Not Found errors specifically as fatal for current key
+        // Handle auth errors
         const isAuthError = 
-            error.status === 400 || error.code === 400 || 
+            error.status === 401 || error.code === 401 || 
             error.status === 403 || error.code === 403 ||
-            (error.message && /API key|permission|403|not found/i.test(error.message));
+            (error.message && /unauthorized|invalid.key|authentication/i.test(error.message));
 
         if (isAuthError) {
-            throw new Error(`Permission Denied: Ensure your API key project has billing enabled for Gemini 3 Pro (Nano Banana Pro).`);
+            throw new Error(`FAL API authentication failed. Please check your FAL_API_KEY.`);
         }
 
         throw error;
@@ -69,7 +71,6 @@ const cropToOriginalAspectRatio = (
         const img = new Image();
         img.src = imageDataUrl;
         img.onload = () => {
-            // Re-calculate the dimensions of the content area within the padded square image
             const aspectRatio = originalWidth / originalHeight;
             let contentWidth, contentHeight;
             if (aspectRatio > 1) { // Landscape
@@ -80,12 +81,10 @@ const cropToOriginalAspectRatio = (
                 contentWidth = targetDimension * aspectRatio;
             }
 
-            // Calculate the top-left offset of the content area
             const x = (targetDimension - contentWidth) / 2;
             const y = (targetDimension - contentHeight) / 2;
 
             const canvas = document.createElement('canvas');
-            // Set canvas to the final, un-padded dimensions
             canvas.width = contentWidth;
             canvas.height = contentHeight;
 
@@ -94,10 +93,8 @@ const cropToOriginalAspectRatio = (
                 return reject(new Error('Could not get canvas context for cropping.'));
             }
             
-            // Draw the relevant part of the square generated image onto the new, smaller canvas
             ctx.drawImage(img, x, y, contentWidth, contentHeight, 0, 0, contentWidth, contentHeight);
             
-            // Return the data URL of the newly cropped image
             resolve(canvas.toDataURL('image/jpeg', 0.95));
         };
         img.onerror = (err) => reject(new Error(`Image load error during cropping: ${err}`));
@@ -105,7 +102,7 @@ const cropToOriginalAspectRatio = (
 };
 
 
-// New resize logic to enforce a consistent aspect ratio without cropping by adding padding
+// Resize logic to enforce a consistent aspect ratio without cropping by adding padding
 const resizeImage = (file: File, targetDimension: number): Promise<File> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -162,25 +159,6 @@ const resizeImage = (file: File, targetDimension: number): Promise<File> => {
     });
 };
 
-// Helper function to convert a File object to a Gemini API Part
-const fileToPart = async (file: File): Promise<{ inlineData: { mimeType: string; data: string; } }> => {
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = error => reject(error);
-    });
-    
-    const arr = dataUrl.split(',');
-    if (arr.length < 2) throw new Error("Invalid data URL");
-    const mimeMatch = arr[0].match(/:(.*?);/);
-    if (!mimeMatch || !mimeMatch[1]) throw new Error("Could not parse MIME type from data URL");
-    
-    const mimeType = mimeMatch[1];
-    const data = arr[1];
-    return { inlineData: { mimeType, data } };
-};
-
 // Helper to convert File to a data URL string
 const fileToDataUrl = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -188,6 +166,21 @@ const fileToDataUrl = (file: File): Promise<string> => {
         reader.readAsDataURL(file);
         reader.onload = () => resolve(reader.result as string);
         reader.onerror = error => reject(error);
+    });
+};
+
+// Helper to fetch an image URL and convert it to a data URL
+const fetchImageAsDataUrl = async (url: string): Promise<string> => {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
     });
 };
 
@@ -302,20 +295,48 @@ const removeWhiteBackground = (imageUrl: string, threshold = 240): Promise<strin
     });
 };
 
+// Helper to call FAL nano-banana-2/edit endpoint
+const callFalEdit = async (imageUrls: string[], prompt: string): Promise<string> => {
+    const response = await fetch(`${FAL_BASE_URL}/edit`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Key ${FAL_API_KEY}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            prompt,
+            image_urls: imageUrls,
+            num_images: 1,
+            output_format: 'jpeg',
+            resolution: '1K',
+        }),
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`FAL API error (${response.status}): ${errorText}`);
+    }
+    
+    const result = await response.json();
+    if (result.images && result.images.length > 0) {
+        return result.images[0].url;
+    }
+    throw new Error('FAL did not return an image');
+};
+
 
 /**
- * Generates a composite image using gemini-3-pro-image-preview.
+ * Generates a composite image using fal-ai/nano-banana-2/edit.
  */
 export const generateCompositeImage = async (
     objectImage: File, 
     objectDescription: string,
     environmentImage: File,
-    environmentDescription: string,
+    _environmentDescription: string,
     dropPosition: { xPercent: number; yPercent: number; },
     depthLayer: DepthLayer = 'midground'
 ): Promise<{ finalImageUrl: string; debugImageUrl: string; finalPrompt: string; }> => {
-  console.log('Starting multi-step image generation process...');
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+  console.log('Starting multi-step image generation process with FAL...');
 
   const { width: originalWidth, height: originalHeight } = await getImageDimensions(environmentImage);
   const MAX_DIMENSION = 1024;
@@ -328,31 +349,8 @@ export const generateCompositeImage = async (
   const markedResizedEnvironmentImage = await markImage(resizedEnvironmentImage, dropPosition, { originalWidth, originalHeight });
   const debugImageUrl = await fileToDataUrl(markedResizedEnvironmentImage);
 
-  console.log('Generating semantic location description with gemini-3-pro-preview...');
-  const markedEnvironmentImagePart = await fileToPart(markedResizedEnvironmentImage);
-
-  const descriptionPrompt = `
-Analyze the exact 3D location indicated by the RED MARKER in the provided scene image.
-Provide a concise, technical description focusing on:
-1. The surface at the marker (material, texture, lighting).
-2. The perspective and vanishing points at that point.
-3. The scale relative to existing furniture nearby.
-`;
-  
-  let semanticLocationDescription = '';
-  try {
-    const descriptionResponse = await retryWithBackoff<GenerateContentResponse>(() => ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: { parts: [{ text: descriptionPrompt }, markedEnvironmentImagePart] }
-    }));
-    semanticLocationDescription = descriptionResponse.text || '';
-  } catch (error) {
-    console.error('Failed to generate semantic location description:', error);
-    if (error instanceof Error && (error.message.includes('Permission') || error.message.includes('403'))) {
-        throw error;
-    }
-    semanticLocationDescription = `at the specified location.`;
-  }
+  const objectImageDataUrl = await fileToDataUrl(resizedObjectImage);
+  const markedSceneDataUrl = await fileToDataUrl(markedResizedEnvironmentImage);
 
   const depthInstructionMap = {
       foreground: "The item must be placed in the immediate FOREGROUND. Appear larger and sharper.",
@@ -360,84 +358,68 @@ Provide a concise, technical description focusing on:
       background: "The item must be placed in the BACKGROUND. Appear smaller and visually distant."
   };
 
-  console.log('Preparing to generate composite image...');
-  const objectImagePart = await fileToPart(resizedObjectImage);
-  const cleanEnvironmentImagePart = await fileToPart(resizedEnvironmentImage); 
-  
   const prompt = `
-Composite the 'product' image into the 'scene' image photorealistically.
-Location: ${semanticLocationDescription}
-Depth: ${depthInstructionMap[depthLayer]}
-Match perspective, lighting, and realistic contact shadows. Scale the "${objectDescription}" to fit naturally with surrounding items.
+Place the furniture item from the first image into the room scene from the second image.
+The red dot in the second image marks the exact placement location.
+${depthInstructionMap[depthLayer]}
+Match perspective, lighting, and realistic contact shadows.
+Scale the "${objectDescription}" to fit naturally with surrounding items.
 `;
 
-  console.log('Sending images to gemini-3-pro-image-preview (Nano Banana Pro)...');
-  const response: GenerateContentResponse = await retryWithBackoff(() => ai.models.generateContent({
-    model: 'gemini-3-pro-image-preview',
-    contents: { parts: [objectImagePart, cleanEnvironmentImagePart, { text: prompt }] },
-  }));
+  console.log('Sending images to fal-ai/nano-banana-2/edit...');
+  const generatedImageUrl = await retryWithBackoff(() => callFalEdit(
+    [objectImageDataUrl, markedSceneDataUrl],
+    prompt
+  ));
 
-  const imagePartFromResponse = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
-
-  if (imagePartFromResponse?.inlineData) {
-    const { mimeType, data } = imagePartFromResponse.inlineData;
-    const generatedSquareImageUrl = `data:${mimeType};base64,${data}`;
-    const finalImageUrl = await cropToOriginalAspectRatio(generatedSquareImageUrl, originalWidth, originalHeight, MAX_DIMENSION);
-    return { finalImageUrl, debugImageUrl, finalPrompt: prompt };
-  }
-
-  throw new Error("The AI model did not return an image. Please ensure your project supports gemini-3-pro-image-preview.");
+  console.log('Fetching generated image from FAL...');
+  const generatedDataUrl = await fetchImageAsDataUrl(generatedImageUrl);
+  const finalImageUrl = await cropToOriginalAspectRatio(generatedDataUrl, originalWidth, originalHeight, MAX_DIMENSION);
+  
+  return { finalImageUrl, debugImageUrl, finalPrompt: prompt };
 };
 
 /**
- * Isolates a product from its background using gemini-3-pro-image-preview.
+ * Isolates a product from its background using fal-ai/nano-banana-2/edit.
  */
 export const isolateProductImage = async (imageFile: File): Promise<string> => {
-    console.log('Isolating product with gemini-3-pro-image-preview...');
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    console.log('Isolating product with fal-ai/nano-banana-2/edit...');
     
     const MAX_DIMENSION = 1024;
     const resizedImage = await resizeImage(imageFile, MAX_DIMENSION);
-    const imagePart = await fileToPart(resizedImage);
+    const imageDataUrl = await fileToDataUrl(resizedImage);
     
-    const prompt = "Identify the main furniture item. Generate a new image consisting ONLY of that exact item on a pure white (#FFFFFF) background. Maintain exact details and perspective.";
+    const prompt = "Isolate the main furniture item from this image and place it on a pure white (#FFFFFF) background. Maintain exact details and perspective.";
     
-    const response: GenerateContentResponse = await retryWithBackoff(() => ai.models.generateContent({
-        model: 'gemini-3-pro-image-preview',
-        contents: { parts: [imagePart, { text: prompt }] },
-    }));
+    const generatedImageUrl = await retryWithBackoff(() => callFalEdit(
+        [imageDataUrl],
+        prompt
+    ));
     
-    const imagePartFromResponse = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
-    if (imagePartFromResponse?.inlineData) {
-        const whiteBgImageUrl = `data:${imagePartFromResponse.inlineData.mimeType};base64,${imagePartFromResponse.inlineData.data}`;
-        return await removeWhiteBackground(whiteBgImageUrl);
-    }
-    throw new Error("Failed to isolate product image with gemini-3-pro-image-preview.");
+    console.log('Fetching isolated image from FAL...');
+    const whiteBgImageUrl = await fetchImageAsDataUrl(generatedImageUrl);
+    return await removeWhiteBackground(whiteBgImageUrl);
 };
 
 /**
- * Edits a scene image based on a text prompt using gemini-3-pro-image-preview.
+ * Edits a scene image based on a text prompt using fal-ai/nano-banana-2/edit.
  */
 export const editScene = async (imageFile: File, prompt: string): Promise<string> => {
-    console.log('Editing scene with gemini-3-pro-image-preview:', prompt);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    console.log('Editing scene with fal-ai/nano-banana-2/edit:', prompt);
 
     const MAX_DIMENSION = 1024;
     const { width: originalWidth, height: originalHeight } = await getImageDimensions(imageFile);
     const resizedImage = await resizeImage(imageFile, MAX_DIMENSION);
-    const imagePart = await fileToPart(resizedImage);
+    const imageDataUrl = await fileToDataUrl(resizedImage);
 
-    const fullPrompt = `Edit this image: "${prompt}". Return only the final image with preserved lighting and style.`;
+    const fullPrompt = `Edit this room scene image: "${prompt}". Return only the final image with preserved lighting and style.`;
 
-    const response: GenerateContentResponse = await retryWithBackoff(() => ai.models.generateContent({
-        model: 'gemini-3-pro-image-preview',
-        contents: { parts: [imagePart, { text: fullPrompt }] }
-    }));
+    const generatedImageUrl = await retryWithBackoff(() => callFalEdit(
+        [imageDataUrl],
+        fullPrompt
+    ));
 
-    const imagePartFromResponse = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
-    if (imagePartFromResponse?.inlineData) {
-        const generatedSquareImageUrl = `data:${imagePartFromResponse.inlineData.mimeType};base64,${imagePartFromResponse.inlineData.data}`;
-        return await cropToOriginalAspectRatio(generatedSquareImageUrl, originalWidth, originalHeight, MAX_DIMENSION);
-    }
-    throw new Error("Failed to edit image with gemini-3-pro-image-preview.");
+    console.log('Fetching edited image from FAL...');
+    const generatedDataUrl = await fetchImageAsDataUrl(generatedImageUrl);
+    return await cropToOriginalAspectRatio(generatedDataUrl, originalWidth, originalHeight, MAX_DIMENSION);
 };

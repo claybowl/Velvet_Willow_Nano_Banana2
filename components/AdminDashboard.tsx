@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { Product } from '../types';
 import ImageUploader from './ImageUploader';
 import ObjectCard from './ObjectCard';
-import { isolateProductImage } from '../services/geminiService';
+import { isolateProductImage } from '../services/falService';
 import Spinner from './Spinner';
 
 interface AdminDashboardProps {
@@ -39,15 +39,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ products, onAddProduct,
             let finalImageUrl: string;
             
             try {
-                // Attempt to process image with Gemini Nano Banana
                 finalImageUrl = await isolateProductImage(newItemImage);
             } catch (err: any) {
-                // Check if it's a permission/auth error, in which case we must bubble it up
-                if (err.message && (err.message.includes("Permission Denied") || err.message.includes("403"))) {
-                    // Re-throw so the outer catch can hand it to onError
-                    throw err;
-                }
-                
                 console.warn("Image isolation failed, using original.", err);
                 finalImageUrl = URL.createObjectURL(newItemImage);
             }
@@ -64,12 +57,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ products, onAddProduct,
             setNewItemName('');
             setNewItemImage(null);
         } catch (e: any) {
-            if (e.message && (e.message.includes("Permission Denied") || e.message.includes("403"))) {
-                onError(e);
-            } else {
-                console.error("Error adding product:", e);
-                alert("Failed to add product.");
-            }
+            console.error("Error adding product:", e);
+            onError(e);
         } finally {
             setIsProcessing(false);
         }
