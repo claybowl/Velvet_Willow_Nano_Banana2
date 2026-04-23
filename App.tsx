@@ -21,16 +21,34 @@ transparentDragImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BA
 
 const defaultVenues = [
     { 
-        name: "Empty Sunlit Studio", 
-        url: "https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?q=80&w=1200&auto=format&fit=crop" 
+        name: "Grand Ballroom", 
+        url: "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?q=80&w=1200&auto=format&fit=crop",
+        description: "Crystal chandeliers and gilded elegance"
     },
     { 
-        name: "Spacious White Room", 
-        url: "https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=1200&auto=format&fit=crop" 
+        name: "Garden Estate", 
+        url: "https://images.unsplash.com/photo-1523438885200-e635ba2c371e?q=80&w=1200&auto=format&fit=crop",
+        description: "European-inspired outdoor ceremony"
     },
     { 
-        name: "Modern Empty Hall", 
-        url: "https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=1200&auto=format&fit=crop" 
+        name: "Vintage Lounge", 
+        url: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?q=80&w=1200&auto=format&fit=crop",
+        description: "Warm tones and timeless sophistication"
+    },
+    { 
+        name: "Osage Hills Studio", 
+        url: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=1200&auto=format&fit=crop",
+        description: "The Velvet Willow's creative atelier"
+    },
+    { 
+        name: "Sunlit Conservatory", 
+        url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=1200&auto=format&fit=crop",
+        description: "Floor-to-ceiling natural light"
+    },
+    { 
+        name: "Moody Velvet Room", 
+        url: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?q=80&w=1200&auto=format&fit=crop",
+        description: "Dramatic hues and rich textures"
     }
 ];
 
@@ -528,7 +546,13 @@ const App: React.FC = () => {
   };
 
   const handleDeleteProduct = (id: number) => {
-      setInventory(prev => prev.filter(p => p.id !== id));
+      setInventory(prev => {
+          const product = prev.find(p => p.id === id);
+          if (product?.imageUrl?.startsWith('blob:')) {
+              URL.revokeObjectURL(product.imageUrl);
+          }
+          return prev.filter(p => p.id !== id);
+      });
       if (selectedProduct?.id === id) {
           setSelectedProduct(null);
           setProductImageFile(null);
@@ -671,7 +695,7 @@ const App: React.FC = () => {
             <aside className="w-80 md:w-96 flex-shrink-0 border-r border-zinc-100 flex flex-col bg-white z-10 shadow-sm h-full">
                 <div className="p-6 pb-2">
                     <h2 className="font-serif text-3xl text-zinc-800 italic mb-1">The Atelier</h2>
-                    <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">Select an item to place</p>
+                    <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">Curated event rentals &mdash; Osage Hills, Oklahoma</p>
                 </div>
                 
                 {/* Tabs */}
@@ -720,18 +744,27 @@ const App: React.FC = () => {
                     
                     {selectedProduct && (
                         <div className="mt-8 p-4 bg-zinc-50 border border-zinc-100 rounded text-center">
-                            <p className="text-xs text-zinc-500 mb-2">Drag the active product onto the mood board to visualize it.</p>
+                            <p className="text-xs text-zinc-500 mb-2">Drag the active piece onto the canvas to visualize your event.</p>
                         </div>
                     )}
+                </div>
+                
+                <div className="p-6 border-t border-zinc-100 mt-auto">
+                    <div className="text-center">
+                        <p className="font-serif text-sm italic text-zinc-600 mb-1">The Velvet Willow</p>
+                        <p className="text-[9px] uppercase tracking-widest text-zinc-400 leading-relaxed">
+                            Full-service event styling<br/>
+                            Osage Hills, Oklahoma
+                        </p>
+                    </div>
                 </div>
             </aside>
 
             {/* MAIN CANVAS: Mood Board */}
             <main className="flex-1 relative bg-dot-pattern flex flex-col h-full overflow-hidden">
-                {/* Canvas Header */}
                 <div className="absolute top-6 left-8 z-10 pointer-events-none">
                     <h1 className="font-serif text-5xl text-zinc-300 italic tracking-tight opacity-50 mix-blend-multiply">Mood Board</h1>
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mt-2 ml-1">Project: The Velvet Experience</p>
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-400 mt-2 ml-1">Design your perfect event</p>
                 </div>
 
                 {/* Depth Controls - Floating Top Center */}
@@ -805,11 +838,12 @@ const App: React.FC = () => {
                         
                         {!sceneImage && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
-                                <p className="font-serif text-3xl text-zinc-300 italic mb-8">Start by uploading a venue...</p>
+                                <p className="font-serif text-3xl text-zinc-300 italic mb-2">Where dreams come to life</p>
+                                <p className="text-sm text-zinc-400 mb-8 max-w-md text-center">Upload your venue photo or choose a backdrop below to begin designing your perfect event.</p>
                                 
                                 <div className="flex flex-col items-center gap-4 pointer-events-auto">
-                                    <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">Or select a template</p>
-                                    <div className="flex gap-4">
+                                    <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">Select a backdrop</p>
+                                    <div className="flex gap-4 flex-wrap justify-center max-w-2xl">
                                         {defaultVenues.map((venue, idx) => (
                                             <button 
                                                 key={idx}
@@ -819,6 +853,9 @@ const App: React.FC = () => {
                                             >
                                                 <img src={venue.url} alt={venue.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                                                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[9px] py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity text-center truncate">
+                                                    {venue.name}
+                                                </div>
                                             </button>
                                         ))}
                                     </div>

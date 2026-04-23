@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import ImageUploader from './ImageUploader';
 import ObjectCard from './ObjectCard';
@@ -21,6 +21,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ products, onAddProduct,
     const [newItemName, setNewItemName] = useState('');
     const [newItemImage, setNewItemImage] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
+
+    const prevBlobUrlRef = useRef<string | null>(null);
+
+    const previewImageUrl = useMemo(() => {
+        if (prevBlobUrlRef.current) {
+            URL.revokeObjectURL(prevBlobUrlRef.current);
+            prevBlobUrlRef.current = null;
+        }
+        return newItemImage ? URL.createObjectURL(newItemImage) : null;
+    }, [newItemImage]);
+
+    useEffect(() => {
+        if (previewImageUrl) {
+            prevBlobUrlRef.current = previewImageUrl;
+        }
+        return () => {
+            if (prevBlobUrlRef.current) {
+                URL.revokeObjectURL(prevBlobUrlRef.current);
+                prevBlobUrlRef.current = null;
+            }
+        };
+    }, [previewImageUrl]);
 
     const handleFileSelect = (file: File) => {
         setNewItemImage(file);
@@ -68,8 +90,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ products, onAddProduct,
         <div className="flex-1 bg-zinc-50 overflow-y-auto p-8 animate-fade-in">
             <div className="max-w-7xl mx-auto">
                 <div className="mb-12">
-                    <h2 className="font-serif text-4xl text-zinc-800 italic mb-2">Inventory Manager</h2>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">Manage your Atelier stock</p>
+                    <h2 className="font-serif text-4xl text-zinc-800 italic mb-2">The Collection</h2>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">Curated pieces for extraordinary events</p>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -85,7 +107,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ products, onAddProduct,
                                         type="text" 
                                         value={newItemName}
                                         onChange={(e) => setNewItemName(e.target.value)}
-                                        placeholder="e.g. Velvet Armchair"
+                                        placeholder="e.g. French Provincial Settee"
                                         className="w-full bg-zinc-50 border border-zinc-200 rounded px-4 py-3 text-sm focus:outline-none focus:border-zinc-800 transition-colors"
                                     />
                                 </div>
@@ -102,7 +124,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ products, onAddProduct,
                                         id="admin-uploader"
                                         label="Product Image"
                                         onFileSelect={handleFileSelect}
-                                        imageUrl={newItemImage ? URL.createObjectURL(newItemImage) : null}
+                                        imageUrl={previewImageUrl}
                                         onError={onError}
                                     />
                                 </div>
