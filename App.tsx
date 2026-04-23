@@ -20,35 +20,35 @@ const transparentDragImage = new Image();
 transparentDragImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 const defaultVenues = [
-    { 
-        name: "Grand Ballroom", 
-        url: "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?q=80&w=1200&auto=format&fit=crop",
-        description: "Crystal chandeliers and gilded elegance"
+    {
+        name: "Painted Grand Hall",
+        url: "https://images.unsplash.com/photo-1769878539345-2d8c4769209d?q=80&w=1200&auto=format&fit=crop",
+        description: "A luminous, empty ballroom with arched windows and a frescoed ceiling"
     },
-    { 
-        name: "Garden Estate", 
-        url: "https://images.unsplash.com/photo-1523438885200-e635ba2c371e?q=80&w=1200&auto=format&fit=crop",
-        description: "European-inspired outdoor ceremony"
+    {
+        name: "Gothic Stone Hall",
+        url: "https://images.unsplash.com/photo-1768741876785-268ebaaddc03?q=80&w=1200&auto=format&fit=crop",
+        description: "Vaulted stone ceilings and stained glass in a vast historic interior"
     },
-    { 
-        name: "Vintage Lounge", 
-        url: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?q=80&w=1200&auto=format&fit=crop",
-        description: "Warm tones and timeless sophistication"
+    {
+        name: "Industrial Warehouse",
+        url: "https://images.unsplash.com/photo-1766021736631-d2f15082aa59?q=80&w=1200&auto=format&fit=crop",
+        description: "Raw concrete floors and soaring steel beams — a blank canvas"
     },
-    { 
-        name: "Osage Hills Studio", 
-        url: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=1200&auto=format&fit=crop",
-        description: "The Velvet Willow's creative atelier"
+    {
+        name: "Open Meadow",
+        url: "https://images.unsplash.com/photo-1567374578224-b57c510ddbf3?q=80&w=1200&auto=format&fit=crop",
+        description: "Wide green fields under an endless blue sky"
     },
-    { 
-        name: "Sunlit Conservatory", 
-        url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=1200&auto=format&fit=crop",
-        description: "Floor-to-ceiling natural light"
+    {
+        name: "Brick Loft",
+        url: "https://images.unsplash.com/photo-1567667867244-2eed283cb70a?q=80&w=1200&auto=format&fit=crop",
+        description: "Exposed brick and timber beams in a sunlit open space"
     },
-    { 
-        name: "Moody Velvet Room", 
-        url: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?q=80&w=1200&auto=format&fit=crop",
-        description: "Dramatic hues and rich textures"
+    {
+        name: "White Studio",
+        url: "https://images.unsplash.com/photo-1704310546522-59f10c7ec294?q=80&w=1200&auto=format&fit=crop",
+        description: "Minimal white walls and soft natural light"
     }
 ];
 
